@@ -1,0 +1,229 @@
+#include <Servo.h>
+#include <DHT.h>
+#include <DHT_U.h>
+#include <LiquidCrystal_I2C.h>
+
+// Define motor driver pins
+#define ENA 5    // Speed control for motors 1 and 2
+#define ENB 6    // Speed control for motors 3 and 4
+#define IN1 7    // Direction control for motor 1
+#define IN2 8    // Direction control for motor 2
+#define IN3 9    // Direction control for motor 3
+#define IN4 10   // Direction control for motor 4
+
+// Define ultrasonic sensor pins
+#define TRIG_PIN 11
+#define ECHO_PIN 12
+
+// Servo motor pin
+#define SERVO_PIN 3
+
+Servo ultrasonicServo;
+// DHT sensor and LCD display pins
+#define DHTPIN 2
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void setup() {
+  // Set motor control pins as outputs
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  // Set ultrasonic sensor pins
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  // Attach servo to the pin
+  ultrasonicServo.attach(SERVO_PIN);
+  // LCD setup
+    lcd.init();
+    lcd.clear();
+    lcd.backlight();
+
+    lcd.setCursor(2, 0);
+    lcd.print("Booting...");
+
+    // DHT sensor setup
+    dht.begin();
+
+    
+    Serial.begin(9600);
+    lcd.setCursor(0, 1);
+    lcd.print("System Ready");
+    delay(2000);
+    lcd.clear();
+  
+}
+
+void loop() {
+    displayTemperatureHumidity();
+
+    int distance = getStableDistance();
+    ultrasonicServo.write(90);
+    // Print the current distance for debugging
+    if (distance == -1) {
+        Serial.println("Out of range");
+    } else {
+        Serial.println(distance);
+    }
+
+    if (distance < 40 && distance != -1) {
+        // Obstacle detected; stop and decide direction
+        stopMotors();
+        int leftDistance = scanDirection(0);   // Look left
+        Serial.print("Left Distance: ");
+        Serial.println(leftDistance);
+        delay(500); // Ensure enough time for servo to stabilize
+        int rightDistance = scanDirection(180); // Look right
+        Serial.print("right Distance: ");
+        Serial.println(rightDistance);
+        ultrasonicServo.write(90);
+        delay(500);
+
+        if ((leftDistance > rightDistance) && (leftDistance>40)) {
+            Serial.print("turning left");
+            turnLeft(255);
+            delay(1000); // Turn for 1 second
+        } else if ((rightDistance > leftDistance) && (rightDistance>40)) {
+            Serial.print("turning right");
+            turnRight(255);
+            delay(1000); // Turn for 1 second
+        } else {
+            Serial.print("going back");
+            moveBackward(255);
+            delay(1000); // Reverse if equal distances
+        }
+    } else if (distance >= 40 && distance <= 50) {
+        // If distance is within a safe range, move forward
+        Serial.print("moving forward");
+        moveForward(255);
+    } else if (distance > 50) {
+        ultrasonicServo.write(90);
+        delay(500);// If the distance is very large, move forward at a reduced speed
+        moveForward(200);
+    }
+}
+
+// Function to display temperature and humidity on the LCD
+void displayTemperatureHumidity() {
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+
+    if (isnan(h) || isnan(t)) {
+        lcd.setCursor(0, 0);
+        lcd.print("DHT Error!");
+        lcd.setCursor(0, 1);
+        lcd.print("Check sensor!");
+        return;
+    }
+
+    lcd.setCursor(0, 0);
+    lcd.print("Hum: ");
+    lcd.print(h);
+    lcd.print("%   ");
+
+    lcd.setCursor(0, 1);
+    lcd.print("Temp: ");
+    lcd.print(t);
+    lcd.print((char)223);
+    lcd.print("C   ");
+}
+
+
+// Function to measure distance using ultrasonic sensor
+int getDistance() {
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_PIN, LOW);
+
+    long duration = pulseIn(ECHO_PIN, HIGH, 30000); // Timeout after 30ms
+    if (duration == 0) return -1; // No echo detected
+    int distance = duration * 0.034 / 2;
+    if (distance < 0 || distance > 400) return -1; // Ignore invalid readings
+    return distance;
+}
+int getStableDistance() {
+    int total = 0;
+    int validReadings = 0;
+    for (int i = 0; i < 5; i++) {
+        int reading = getDistance();
+        if (reading != -1) {
+            total += reading;
+            validReadings++;
+        }
+        delay(10); // Small delay between readings
+    }
+    if (validReadings == 0) return -1;
+    return total / validReadings; // Average of valid readings
+}
+
+
+
+// Function to scan direction using the servo
+int scanDirection(int angle) {
+  ultrasonicServo.write(angle); // Move servo to specified angle
+  delay(500);                   // Allow time for movement
+  return getDistance();         // Measure distance at the angle
+}
+
+
+void moveBackward(int speed) {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, speed);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, speed);
+}
+
+
+void moveForward(int speed) {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, speed);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENB, speed);
+}
+
+// Function to turn left-THIS IS ACTUALLY TURNING RIGHT BUT IT WORKS
+void turnLeft(int speed) {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 0);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, speed);
+}
+
+// Function to turn right-THIS IS ACTUALLY TURNING LEFT BUT IT WORKS
+void turnRight(int speed) {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, speed);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, 0);
+}
+
+// Function to stop all motors
+void stopMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 0);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, 0);
+}
