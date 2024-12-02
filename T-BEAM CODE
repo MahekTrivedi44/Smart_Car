@@ -1,0 +1,154 @@
+#include <WiFi.h>
+#include "ThingSpeak.h"
+#include <DHT.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <HardwareSerial.h>
+#include <TinyGPSPlus.h>
+
+// Pin Definitions
+#define DHTPIN 13
+#define BUZZER_PIN 25
+#define MQ2_PIN 36
+#define LCD_BACKLIGHT_PIN 32  // Pin to control LCD backlight
+
+// DHT Sensor Type
+#define DHTTYPE DHT11
+
+// Wi-Fi Credentials
+const char* ssid = "GrandBelleVue-91234";        // Wi-Fi SSID
+const char* password = "blv623755"; // Wi-Fi Password
+
+unsigned long channel = 2719263;       // channel number
+const char* API = "YQ8MDZY34JT3C59X";      // API Key
+
+// ThingSpeak Setup
+WiFiClient client;
+HardwareSerial GPSSerial(1);  // default Serial1 (GPIO 34 for RX, GPIO 12 for TX)
+TinyGPSPlus gps;  
+
+// DHT Sensor and LCD Setup
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2); 
+
+// Variables
+unsigned long lastTime = 0;
+unsigned long timerDelay = 30000; // 30-second interval for updates
+
+// Function to average smoke level readings with smoothing
+// Function to directly calculate smoke level as a percentage
+float readSmokeLevel() {
+  float reading = analogRead(MQ2_PIN);       // Read the analog value from the sensor
+  float level = (reading / 1023.0) * 100.0; // Convert to percentage (0-100)
+  return level;                             // Return the percentage
+}
+
+void setup() {
+  // Serial Monitor
+  Serial.begin(115200);
+  Serial.println("T-Beam Ready");
+  WiFi.mode(WIFI_STA);
+  // Wi-Fi Setup
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("WiFi Connected");
+  Serial.print("T-BEAM IP Address: ");
+  Serial.println(WiFi.localIP());  // Print the IP address
+  // ThingSpeak Setup
+  ThingSpeak.begin(client);
+  Serial.println("ThingSpeak client ready");
+  GPSSerial.begin(9600, SERIAL_8N1, 34, 12);  // RX = Pin 34, TX = Pin 12-DEFAULT so no need to connect
+  // DHT and LCD Setup
+  dht.begin();
+  lcd.init();
+  lcd.backlight();
+  pinMode(LCD_BACKLIGHT_PIN, OUTPUT); // Set the LCD backlight pin as output
+  digitalWrite(LCD_BACKLIGHT_PIN, LOW); // Turn off the LCD initially
+
+  // Buzzer Setup
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  // MQ2 Pin Setup
+  pinMode(MQ2_PIN, INPUT);
+}
+
+void loop() {
+  thegpsfunction();
+  float temperature = dht.readTemperature(); // Read temperature
+  float humidity = dht.readHumidity();       // Read humidity
+  int smokeLevel = readSmokeLevel();         // Get averaged smoke level
+
+  // Debugging: Print the smoke level being sent to ThingSpeak
+  Serial.print("Sending Smoke Level: ");
+  Serial.println(smokeLevel);  // Display the mapped value being sent to ThingSpeak
+
+  // LCD Display logic: Turn on LCD if smoke or temperature exceeds threshold
+  if (temperature > 35 || smokeLevel > 2) {
+    digitalWrite(LCD_BACKLIGHT_PIN, HIGH);    // Turn on the LCD
+    lcd.clear();                              // Clear the display
+    if (temperature > 35) {
+      lcd.setCursor(0, 0);
+      lcd.print("HEAT DETECTED");
+      lcd.setCursor(0, 1);
+      lcd.print("Temp: ");
+      lcd.print(temperature, 1);
+      lcd.print(" C");
+    } else {
+      lcd.setCursor(0, 0);
+      lcd.print("Smoke Detected");
+      lcd.setCursor(0, 1);
+      lcd.print("Smoke Level: ");
+      lcd.print(smokeLevel);
+    }
+    digitalWrite(BUZZER_PIN, HIGH); // Turn on buzzer
+  } else {
+    digitalWrite(LCD_BACKLIGHT_PIN, LOW);  // Turn off the LCD
+    digitalWrite(BUZZER_PIN, LOW);         // Turn off buzzer
+  }
+
+  // Update ThingSpeak with all data
+  ThingSpeak.setField(1, temperature); // Field 1: Temperature
+  ThingSpeak.setField(2, smokeLevel); // Field 2: Smoke Level
+  ThingSpeak.setField(3, humidity);   // Field 3: Humidity
+
+  // Only update GPS fields if valid data is received
+  if (gps.location.isValid()) {
+    ThingSpeak.setField(4, (float)gps.location.lat());  // Field 4: Latitude
+    ThingSpeak.setField(5, (float)gps.location.lng()); // Field 5: Longitude
+  }
+
+  int resp = ThingSpeak.writeFields(channel, API);
+  if (resp == 200) {
+    Serial.println("Data successfully sent to ThingSpeak.");
+  } else {
+    Serial.println("Failed to send data to ThingSpeak. HTTP error: " + String(resp));
+  }
+
+  delay(timerDelay); // Wait before next loop
+}
+
+void thegpsfunction() {
+  // Check if enough time has passed to send data
+  if ((millis() - lastTime) > timerDelay) {
+    while (GPSSerial.available()) {
+      char c = GPSSerial.read(); // Read each character from GPS
+      if (gps.encode(c)) { // Process GPS data when a complete sentence is parsed
+        if (gps.location.isValid()) {
+          float latitude = gps.location.lat();
+          float longitude = gps.location.lng();
+          // Print GPS data to Serial Monitor
+          Serial.print("Latitude: ");
+          Serial.println(latitude, 6);
+          Serial.print("Longitude: ");
+          Serial.println(longitude, 6);
+        }
+      }
+    }
+    lastTime = millis(); // Update last execution time
+  }
+}
+
