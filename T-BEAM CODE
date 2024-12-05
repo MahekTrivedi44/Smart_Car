@@ -1,10 +1,12 @@
-#include <WiFi.h>
-#include "ThingSpeak.h"
-#include <DHT.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
-#include <HardwareSerial.h>
-#include <TinyGPSPlus.h>
+#include <WiFi.h> //for wifi
+#include "ThingSpeak.h"  //for thingspeak
+#include <DHT.h>  //for temp and humidity
+#include <Wire.h> //to control I2C LCD
+#include <LiquidCrystal_I2C.h> //for LCD
+//manage an additional hardware based serial port
+#include <HardwareSerial.h> 
+//decode and process data from neo gps
+#include <TinyGPSPlus.h> 
 
 // Pin Definitions
 #define DHTPIN 13
@@ -16,20 +18,20 @@
 #define DHTTYPE DHT11
 
 // Wi-Fi Credentials
-const char* ssid = "GrandBelleVue-91234";        // Wi-Fi SSID
-const char* password = "blv623755"; // Wi-Fi Password
+const char* ssid = "MDX welcomes you"; //SSID
+const char* password = "MdxL0vesyou"; //Password
 
-unsigned long channel = 2719263;       // channel number
-const char* API = "YQ8MDZY34JT3C59X";      // API Key
+unsigned long channel = 2719263; //channel number
+const char* API = "YQ8MDZY34JT3C59X"; //write API Key
 
 // ThingSpeak Setup
 WiFiClient client;
-HardwareSerial GPSSerial(1);  // default Serial1 (GPIO 34 for RX, GPIO 12 for TX)
-TinyGPSPlus gps;  
+HardwareSerial GPSSerial(1);  // Using the default Serial1 (GPIO 34 for RX, GPIO 12 for TX)
+TinyGPSPlus gps;  // TinyGPS++ object to parse GPS data
 
 // DHT Sensor and LCD Setup
 DHT dht(DHTPIN, DHTTYPE);
-LiquidCrystal_I2C lcd(0x27, 16, 2); 
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Adjust address to 0x27 or 0x3F as needed
 
 // Variables
 unsigned long lastTime = 0;
@@ -38,9 +40,10 @@ unsigned long timerDelay = 30000; // 30-second interval for updates
 // Function to average smoke level readings with smoothing
 // Function to directly calculate smoke level as a percentage
 float readSmokeLevel() {
-  float reading = analogRead(MQ2_PIN);       // Read the analog value from the sensor
-  float level = (reading / 1023.0) * 100.0; // Convert to percentage (0-100)
-  return level;                             // Return the percentage
+  // Read analog value, convert to %
+  float reading = analogRead(MQ2_PIN);       
+  float level = (reading / 1023.0) * 100.0; 
+  return level;                             
 }
 
 void setup() {
@@ -60,7 +63,7 @@ void setup() {
   // ThingSpeak Setup
   ThingSpeak.begin(client);
   Serial.println("ThingSpeak client ready");
-  GPSSerial.begin(9600, SERIAL_8N1, 34, 12);  // RX = Pin 34, TX = Pin 12-DEFAULT so no need to connect
+  GPSSerial.begin(9600, SERIAL_8N1, 34, 12);  // RX = Pin 34, TX = Pin 12
   // DHT and LCD Setup
   dht.begin();
   lcd.init();
@@ -87,7 +90,7 @@ void loop() {
   Serial.println(smokeLevel);  // Display the mapped value being sent to ThingSpeak
 
   // LCD Display logic: Turn on LCD if smoke or temperature exceeds threshold
-  if (temperature > 35 || smokeLevel > 2) {
+  if (temperature > 35 || smokeLevel > 3) {
     digitalWrite(LCD_BACKLIGHT_PIN, HIGH);    // Turn on the LCD
     lcd.clear();                              // Clear the display
     if (temperature > 35) {
@@ -111,9 +114,12 @@ void loop() {
   }
 
   // Update ThingSpeak with all data
-  ThingSpeak.setField(1, temperature); // Field 1: Temperature
-  ThingSpeak.setField(2, smokeLevel); // Field 2: Smoke Level
-  ThingSpeak.setField(3, humidity);   // Field 3: Humidity
+  // Field 1: Temperature
+  ThingSpeak.setField(1, temperature); 
+  // Field 2: Smoke Level
+  ThingSpeak.setField(2, smokeLevel); 
+  // Field 3: Humidity
+  ThingSpeak.setField(3, humidity);   
 
   // Only update GPS fields if valid data is received
   if (gps.location.isValid()) {
