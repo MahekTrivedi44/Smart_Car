@@ -18,8 +18,8 @@
 #define DHTTYPE DHT11
 
 // Wi-Fi Credentials
-const char* ssid = "MDX welcomes you"; //SSID
-const char* password = "MdxL0vesyou"; //Password
+const char* ssid = "GrandBelleVue-91234"; //SSID
+const char* password = "blv623755"; //Password
 
 unsigned long channel = 2719263; //channel number
 const char* API = "YQ8MDZY34JT3C59X"; //write API Key
@@ -42,7 +42,7 @@ unsigned long timerDelay = 30000; // 30-second interval for updates
 float readSmokeLevel() {
   // Read analog value, convert to %
   float reading = analogRead(MQ2_PIN);       
-  float level = (reading / 1023.0) * 100.0; 
+  float level = (reading / 4095.0) * 100.0; 
   return level;                             
 }
 
@@ -72,8 +72,8 @@ void setup() {
   digitalWrite(LCD_BACKLIGHT_PIN, LOW); // Turn off the LCD initially
 
   // Buzzer Setup
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
+  //pinMode(BUZZER_PIN, OUTPUT);
+  //digitalWrite(BUZZER_PIN, LOW);
 
   // MQ2 Pin Setup
   pinMode(MQ2_PIN, INPUT);
@@ -84,16 +84,17 @@ void loop() {
   float temperature = dht.readTemperature(); // Read temperature
   float humidity = dht.readHumidity();       // Read humidity
   int smokeLevel = readSmokeLevel();         // Get averaged smoke level
-
+  Serial.print("Temp:");
+  Serial.println(temperature);
   // Debugging: Print the smoke level being sent to ThingSpeak
   Serial.print("Sending Smoke Level: ");
   Serial.println(smokeLevel);  // Display the mapped value being sent to ThingSpeak
 
   // LCD Display logic: Turn on LCD if smoke or temperature exceeds threshold
-  if (temperature > 35 || smokeLevel > 3) {
-    digitalWrite(LCD_BACKLIGHT_PIN, HIGH);    // Turn on the LCD
-    lcd.clear();                              // Clear the display
-    if (temperature > 35) {
+  if (temperature > 55 || smokeLevel > 80) {
+    digitalWrite(LCD_BACKLIGHT_PIN, HIGH);                      //Turn on LCD
+    lcd.clear();   // Clear the display
+    if (temperature > 55) {
       lcd.setCursor(0, 0);
       lcd.print("HEAT DETECTED");
       lcd.setCursor(0, 1);
@@ -107,10 +108,11 @@ void loop() {
       lcd.print("Smoke Level: ");
       lcd.print(smokeLevel);
     }
-    digitalWrite(BUZZER_PIN, HIGH); // Turn on buzzer
+    //digitalWrite(BUZZER_PIN, HIGH);  
+    tone(BUZZER_PIN, 1000);                             // Turn on buzzer
   } else {
     digitalWrite(LCD_BACKLIGHT_PIN, LOW);  // Turn off the LCD
-    digitalWrite(BUZZER_PIN, LOW);         // Turn off buzzer
+    //digitalWrite(BUZZER_PIN, LOW);         // Turn off buzzer
   }
 
   // Update ThingSpeak with all data
