@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThingSpeak Monitoring App</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Satisfy&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', cursive, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-image: url('bg.png'); /* Set the background image */
+      background-size: 34%; /* Reduce size by 60% */
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+    .phone {
+      width: 200px;
+      height: 410px;
+      border-radius: 30px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+      position: relative;
+      background-size: cover;
+      background-position: center;
+    }
+    .header {
+      background-color: rgba(0, 0, 0, 0.6); /* Black with 60% opacity */
+      color: white;
+      width: 100%;
+      text-align: center;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-family: 'Satisfy', cursive;
+      box-sizing: border-box;
+    }
+
+    .info-container {
+      width: 100%;
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+	  height:180px;
+	  
+    }
+
+    .dashboard, #map {
+      display: none;
+      padding: 10px;
+	  background-color: rgba(0, 0, 0, 0.6); /* Black with 60% opacity */
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      height: 100px;
+      overflow-y: auto;
+	  color:white;
+    }
+    #map {
+      height: 150px;
+      width: 100%;
+    }
+
+    .container {
+      position:absolute;
+	  margin-top: 280px;
+      display: flex;
+      flex-direction: row; /* Change to row for horizontal alignment */
+      justify-content: center; /* Center the buttons horizontally */
+      width: 100%;
+    }
+
+    .icon-button {
+      display: flex;
+	  
+      flex-direction: column;
+      align-items: center;
+      margin: 0 30px; /* Add horizontal margin for spacing between buttons */
+      cursor: pointer;
+    }
+
+    .icon-circle {
+      width: 40px;
+      height: 40px;
+      background-color: black;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 24px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      margin-bottom: 5px;
+    }
+    .icon-circle:hover {
+      background-color: black;
+    }
+
+    .home-button {
+      position: absolute;
+      bottom: 20px;
+      width: 40px;
+      height: 40px;
+      background-color: #ecf0f1;
+      border-radius: 50%;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+    }
+    .home-button:before {
+      content: '';
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 20px;
+      height: 20px;
+      background-color: black;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="header">
+      <h1 style="font-size: 20px; margin: 0;">F U T U R A</h1>
+    </div>
+
+    <!-- Information container for engine health and map -->
+    <div class="info-container">
+      <div class="dashboard" id="engine-health">
+        <h2 style="font-size: 12px; margin: 0;">Engine Health</h2>
+        <p id="engine-data" style="font-size: 12px;">Loading...</p>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <!-- Container for buttons -->
+    <div class="container">
+      <!-- Engine Health Button -->
+      <div class="icon-button" onclick="showEngineHealth()">
+        <div class="icon-circle"><img src="https://e7.pngegg.com/pngimages/947/72/png-clipart-car-vehicle-health-garage-room-health-check-thumbnail.png" 
+               alt="Map Icon" 
+               style="width: 40px; height: 40px; filter: invert(100%);border-radius: 50%;"></div>
+      </div>
+
+      <!-- Location Button -->
+      <div class="icon-button" onclick="showLocation()">
+        <div class="icon-circle">
+          <img src="https://image.similarpng.com/very-thumbnail/2021/01/GPS-icon-design-on-transparent-background-PNG.png" 
+               alt="Map Icon" 
+               style="width: 25px; height: 25px; filter: invert(100%);">
+        </div>
+      </div>
+    </div>
+    
+    <div class="home-button" onclick="goHome()"></div>
+  </div>
+
+  <script>
+    const THINGSPEAK_API = 'https://api.thingspeak.com/channels/2719263/feeds.json?results=1';
+    const engineHealthDiv = document.getElementById('engine-health');
+    const engineData = document.getElementById('engine-data');
+    const mapDiv = document.getElementById('map');
+    let map;
+
+    async function fetchData() {
+      const response = await fetch(THINGSPEAK_API);
+      const data = await response.json();
+      console.log(data);
+      return data.feeds[0];
+    }
+
+    async function showEngineHealth() {
+      const data = await fetchData();
+      engineHealthDiv.style.display = 'block';
+      mapDiv.style.display = 'none';
+
+      const temp = parseFloat(data.field1);
+      const smoke = parseInt(data.field2);
+      const humidity = parseInt(data.field3);
+
+      engineData.innerHTML = `  
+        <strong>Temp:</strong> ${isNaN(temp) ? 'Data not available' : temp.toFixed(2)} °C<br>
+        <strong>Smoke:</strong> ${isNaN(smoke) ? 'Data not available' : smoke}<br>
+        <strong>Humidity:</strong> ${isNaN(humidity) ? 'Data not available' : humidity}% 
+      `;
+    }
+
+    async function showLocation() {
+      const data = await fetchData();
+      const latitude = parseFloat(data.field4);
+      const longitude = parseFloat(data.field5);
+
+      engineHealthDiv.style.display = 'none';
+      mapDiv.style.display = 'block';
+
+      if (!map) {
+        map = L.map('map').setView([latitude, longitude], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        }).addTo(map);
+      } else {
+        map.setView([latitude, longitude], 13);
+      }
+
+      L.marker([latitude, longitude])
+        .addTo(map)
+        .bindPopup('Current Location')
+        .openPopup();
+    }
+
+    function goHome() {
+      engineHealthDiv.style.display = 'none';
+      mapDiv.style.display = 'none';
+    }
+  </script>
+</body>
+</html>
