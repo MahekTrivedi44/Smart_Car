@@ -96,25 +96,25 @@ void loop() {
 
         if ((leftDistance > rightDistance) && (leftDistance>40)) {
             Serial.print("turning left");
-            turnLeft(255);
+            turnLeft(150);
             delay(1000); // Turn for 1 second
         } else if ((rightDistance > leftDistance) && (rightDistance>40)) {
             Serial.print("turning right");
-            turnRight(255);
+            turnRight(150);
             delay(1000); // Turn for 1 second
         } else {
             Serial.print("going back");
-            moveBackward(255);
+            moveBackward(150);
             delay(1000); // Reverse if equal distances
         }
     } else if (distance >= 40 && distance <= 50) {
         // If distance is within a safe range, move forward
         Serial.print("moving forward");
-        moveForward(255);
+        moveForward(150);
     } else if (distance > 50) {
         ultrasonicServo.write(90);
         delay(500);// If the distance is very large, move forward at a reduced speed
-        moveForward(200);
+        moveForward(150);
     }
 }
 void ledfunction(){
@@ -172,7 +172,7 @@ int getDistance() {
     long duration = pulseIn(ECHO_PIN, HIGH, 30000); // Timeout after 30ms
     if (duration == 0) return -1; // No echo detected
     int distance = duration * 0.034 / 2;
-    if (distance < 0 || distance > 400) return -1; // Ignore invalid readings
+    if (distance < 0 || distance > 600) return -1; // Ignore invalid readings
     return distance;
 }
 int getStableDistance() {
@@ -247,9 +247,13 @@ void turnRight(int speed) {
 void stopMotors() {
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
-  analogWrite(ENA, 0);
+  analogWrite(ENA, 0); // Stop motor 1 and 2
 
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, LOW);
-  analogWrite(ENB, 0);
+  analogWrite(ENB, 0); // Stop motor 3 and 4
+
+  // Completely turn off motor speed pins to conserve power
+  digitalWrite(ENA, LOW);
+  digitalWrite(ENB, LOW);
 }
